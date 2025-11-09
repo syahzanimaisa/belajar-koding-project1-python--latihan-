@@ -1,1 +1,72 @@
-# belajar-koding-project1-python--latihan-
+import cv2
+import mediapipe as mp
+
+mp_hands = mp.solutions.hands
+mp_draw = mp.solutions.drawing_utils
+hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
+
+cap = cv2.VideoCapture(0)
+
+def count_fingers(hand_landmarks):
+    finger_tips = [8, 12, 16, 20]  
+    finger_pips = [6, 10, 14, 18]
+
+    fingers = []
+
+    # Cek telunjuk – kelingking (index=8, middle=12, ring=16, little=20)
+    for tip, pip in zip(finger_tips, finger_pips):
+        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
+            fingers.append(1)
+        else:
+            fingers.append(0)
+
+    # Cek ibu jari (thumb)
+    if hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x:
+        thumb = 1
+    else:
+        thumb = 0
+
+    return [thumb] + fingers  # [thumb, index, middle, ring, little]
+
+
+while True:
+    ret, frame = cap.read()
+    frame = cv2.flip(frame, 1)
+    h, w, c = frame.shape
+
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = hands.process(img_rgb)
+
+    if results.multi_hand_landmarks:
+        for handLms in results.multi_hand_landmarks:
+            # gambar titik dan garis
+            mp_draw.draw_landmarks(frame, handLms, mp_hands.HAND_CONNECTIONS)
+
+            # ambil koordinat semua titik
+            lm_list = []
+            for id, lm in enumerate(handLms.landmark):
+                lm_list.append((int(lm.x * w), int(lm.y * h)))
+
+            # buat bounding box
+            x_values = [p[0] for p in lm_list]
+            y_values = [p[1] for p in lm_list]
+            x_min, x_max = min(x_values), max(x_values)
+            y_min, y_max = min(y_values), max(y_values)
+
+            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (255, 0, 0), 2)
+
+            # deteksi jari
+            fingers = count_fingers(handLms)
+            total_up = fingers.count(1)
+
+            # kalau hanya 1 jari (telunjuk) yang terangkat
+            if total_up == 1 and fingers[1] == 1:
+                cv2.putText(frame, "Perkenalkan", (x_min, y_min - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+
+    cv2.imshow("Hand Sign Detection", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
